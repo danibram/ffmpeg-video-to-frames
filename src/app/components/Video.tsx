@@ -33,11 +33,11 @@ function flattenObject(obj: Record<string, unknown>, parentKey = ''): FlattenedO
 }
 
 type Props = {
-  data: FlattenedObject[] | null;
+  data: FlattenedObject[];
 };
 
 export const InfoTable: React.FC<Props> = ({ data }) => {
-  if (!data) return null;
+  if (data?.length === 0) return null;
 
   return (
     <div className="overflow-x-auto">
