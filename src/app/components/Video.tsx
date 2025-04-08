@@ -133,7 +133,22 @@ const Video = () => {
     }
     if (messageRef.current) messageRef.current.innerHTML = 'Complete';
 
+  }
 
+
+  const handleReverseVideoAndDownload = async (file: File) => {
+    if (messageRef.current) messageRef.current.innerHTML = 'Reversing video...';
+    const ffmpeg = ffmpegRef.current;
+    await ffmpeg.writeFile(file.name, await fetchFile(file));
+    await ffmpeg.exec(["-i", file.name, "-vf", "reverse", "reversed.mp4"]);
+
+    const reversedVideo = await ffmpeg.readFile("reversed.mp4");
+    downloadBlob(reversedVideo as Uint8Array<ArrayBufferLike>, `${file.name.split('.')[0]}_reversed.mp4`, 'video/mp4');
+
+    await ffmpeg.deleteFile("reversed.mp4");
+    await ffmpeg.deleteFile(file.name);
+
+    if (messageRef.current) messageRef.current.innerHTML = 'Complete';
   }
 
 
@@ -177,6 +192,9 @@ const Video = () => {
         <button className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" onClick={() => {
           handleExtractFramesAndDownload(30, file);
         }}>Extract 30 frames</button>
+        <button className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" onClick={() => {
+          handleReverseVideoAndDownload(file);
+        }}>Reverse Video</button>
       </div>
       )}
       {frames > -1 && (
