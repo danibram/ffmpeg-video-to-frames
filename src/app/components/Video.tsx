@@ -6,31 +6,7 @@ import JSZip from 'jszip';
 import { useEffect, useRef, useState } from "react";
 import { flattenObject, type FlattenedObject } from "../utils/flattenObject";
 import { InfoTable } from "./InfoTable";
-
-const FRAMES = 30;
-
-const downloadURL = (data: string, fileName: string) => {
-  const a = document.createElement('a')
-  a.href = data
-  a.download = fileName
-  document.body.appendChild(a)
-  a.style.display = 'none'
-  a.click()
-  a.remove()
-}
-
-const downloadBlob = (data: Uint8Array<ArrayBufferLike>, fileName: string, mimeType: string) => {
-
-  const blob = new Blob([data], {
-    type: mimeType
-  })
-
-  const url = window.URL.createObjectURL(blob)
-
-  downloadURL(url, fileName)
-
-  setTimeout(() => window.URL.revokeObjectURL(url), 1000)
-}
+import { VideoPlayer } from "./VideoPlayer";
 
 const Video = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -53,40 +29,6 @@ const Video = () => {
     setIsLoading(false);
   };
 
-  const extractFrames = async (nFrames: number, file: File, onFrame: (n: number) => void): Promise<Uint8Array<ArrayBufferLike>[]> => {
-    if (messageRef.current) messageRef.current.innerHTML = `Extracting frames...`;
-    const frames: Uint8Array<ArrayBufferLike>[] = [];
-    const ffmpeg = ffmpegRef.current;
-    const { name } = file;
-    await ffmpeg.writeFile(name, await fetchFile(file));
-    for (let i = 0; i < nFrames; i++) {
-      onFrame(i);
-      const timestamp = (i * 0.1).toFixed(2);
-
-      await ffmpeg.exec(["-ss", `${timestamp}`, "-i", name, "-frames:v", "1", `${timestamp}.webp`]);
-
-      const frame = await ffmpeg.readFile(`${timestamp}.webp`) as Uint8Array;
-
-      frames.push(frame);
-      await ffmpeg.deleteFile(`${timestamp}.webp`);
-    }
-    await ffmpeg.deleteFile(name);
-    if (messageRef.current) messageRef.current.innerHTML = `Complete`;
-    return frames;
-  }
-
-  const zipFramesAndDownload = async (frames: Uint8Array<ArrayBufferLike>[], name: string) => {
-    const zip = new JSZip();
-    frames.forEach((frame, i) => {
-      zip.file(`${i}.webp`, frame);
-    });
-
-    const content = await zip.generateAsync({ type: 'blob' });
-    const url = window.URL.createObjectURL(content)
-    downloadURL(url, `${name}.zip`)
-    setTimeout(() => window.URL.revokeObjectURL(url), 1000)
-  }
-
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const ffmpeg = ffmpegRef.current;
     const file = event.target.files?.[0];
@@ -103,55 +45,191 @@ const Video = () => {
       await ffmpeg.deleteFile(`output.txt`);
       await ffmpeg.deleteFile(name);
       if (messageRef.current) messageRef.current.innerHTML = 'Ready to go!';
-
-      // let frames: Uint8Array<ArrayBufferLike>[] = [];
-      // try {
-      //   frames = await extractFrames(FRAMES, file, (n) => setFrames(n));
-      // } catch (error) {
-      //   console.error('Error:', error);
-      // }
-
-      // await zipFramesAndDownload(frames, name.split('.')[0]);
-      // if (messageRef.current) messageRef.current.innerHTML = 'Complete';
     }
   };
 
-  const handleExtractFramesAndDownload = async (nFrames: number, file: File) => {
-    if (messageRef.current) messageRef.current.innerHTML = 'Extracting...';
-    if (nFrames === 1) {
-      const frame = await extractFrames(nFrames, file, () => ({}));
-      downloadBlob(frame[0], `${file.name.split('.')[0]}.webp`, 'image/webp');
-    } else {
-      let frames: Uint8Array<ArrayBufferLike>[] = [];
-      try {
-        frames = await extractFrames(nFrames, file, (n) => setFrames(n));
-      } catch (error) {
-        console.error('Error:', error);
+  const handleFrameExtracted = async (frame: Uint8Array, timestamp: number) => {
+    if (messageRef.current) messageRef.current.innerHTML = `Extracted frame at ${timestamp.toFixed(2)}s`;
+
+    // Create a zip file for the extracted frame
+    const zip = new JSZip();
+    zip.file(`frame_${timestamp.toFixed(2)}.webp`, frame);
+
+    // Generate and download the zip file
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = window.URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `frame_${timestamp.toFixed(2)}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleVideoCut = async (startTime: number, endTime: number) => {
+    if (!file) return;
+
+    if (messageRef.current) messageRef.current.innerHTML = 'Cutting video...';
+
+    try {
+      const ffmpeg = ffmpegRef.current;
+      const { name } = file;
+
+      // Write the input file to FFmpeg's virtual filesystem
+      await ffmpeg.writeFile(name, await fetchFile(file));
+
+      // Cut the video using the specified start and end times
+      // Using -c:v libx264 for better quality and compatibility
+      await ffmpeg.exec([
+        "-i", name,
+        "-ss", startTime.toString(),
+        "-t", (endTime - startTime).toString(),
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "cut_video.mp4"
+      ]);
+
+      // Read the cut video
+      const cutVideo = await ffmpeg.readFile("cut_video.mp4");
+
+      // Download the cut video
+      const blob = new Blob([cutVideo], { type: 'video/mp4' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${file.name.split('.')[0]}_cut.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      // Clean up
+      await ffmpeg.deleteFile("cut_video.mp4");
+      await ffmpeg.deleteFile(name);
+
+      if (messageRef.current) messageRef.current.innerHTML = 'Video cut complete!';
+    } catch (error) {
+      console.error('Error cutting video:', error);
+      if (messageRef.current) messageRef.current.innerHTML = 'Error cutting video';
+    }
+  };
+
+  const handleVideoCutReversed = async (startTime: number, endTime: number) => {
+    if (!file) return;
+
+    if (messageRef.current) messageRef.current.innerHTML = 'Cutting and reversing video...';
+
+    try {
+      const ffmpeg = ffmpegRef.current;
+      const { name } = file;
+
+      // Write the input file to FFmpeg's virtual filesystem
+      await ffmpeg.writeFile(name, await fetchFile(file));
+
+      // Cut the video using the specified start and end times and reverse it
+      await ffmpeg.exec([
+        "-i", name,
+        "-ss", startTime.toString(),
+        "-t", (endTime - startTime).toString(),
+        "-vf", "reverse",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "cut_reversed_video.mp4"
+      ]);
+
+      // Read the cut and reversed video
+      const cutReversedVideo = await ffmpeg.readFile("cut_reversed_video.mp4");
+
+      // Download the cut and reversed video
+      const blob = new Blob([cutReversedVideo], { type: 'video/mp4' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${file.name.split('.')[0]}_cut_reversed.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      // Clean up
+      await ffmpeg.deleteFile("cut_reversed_video.mp4");
+      await ffmpeg.deleteFile(name);
+
+      if (messageRef.current) messageRef.current.innerHTML = 'Video cut and reversed complete!';
+    } catch (error) {
+      console.error('Error cutting and reversing video:', error);
+      if (messageRef.current) messageRef.current.innerHTML = 'Error cutting and reversing video';
+    }
+  };
+
+  const handleExtractMultipleFrames = async (startTime: number, endTime: number, numFrames: number) => {
+    if (!file) return;
+
+    if (messageRef.current) messageRef.current.innerHTML = 'Extracting multiple frames...';
+
+    try {
+      const ffmpeg = ffmpegRef.current;
+      const { name } = file;
+
+      // Write the input file to FFmpeg's virtual filesystem
+      await ffmpeg.writeFile(name, await fetchFile(file));
+
+      // Calculate time step between frames
+      const timeStep = (endTime - startTime) / (numFrames - 1);
+
+      // Create a zip file for the extracted frames
+      const zip = new JSZip();
+
+      // Extract frames at regular intervals
+      for (let i = 0; i < numFrames; i++) {
+        const frameTime = startTime + (i * timeStep);
+        const timestamp = frameTime.toFixed(2);
+
+        // Update progress
+        if (messageRef.current) {
+          messageRef.current.innerHTML = `Extracting frame ${i + 1}/${numFrames} at ${timestamp}s`;
+        }
+
+        // Extract frame at the specified time
+        await ffmpeg.exec([
+          "-ss", timestamp,
+          "-i", name,
+          "-frames:v", "1",
+          "-q:v", "2",
+          `frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`
+        ]);
+
+        // Read the extracted frame
+        const frame = await ffmpeg.readFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`);
+
+        // Add frame to zip
+        zip.file(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`, frame);
+
+        // Clean up the frame file
+        await ffmpeg.deleteFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`);
       }
 
-      await zipFramesAndDownload(frames, file.name.split('.')[0]);
+      // Generate and download the zip file
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${file.name.split('.')[0]}_frames.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      // Clean up
+      await ffmpeg.deleteFile(name);
+
+      if (messageRef.current) messageRef.current.innerHTML = 'Frames extracted and downloaded!';
+    } catch (error) {
+      console.error('Error extracting frames:', error);
+      if (messageRef.current) messageRef.current.innerHTML = 'Error extracting frames';
     }
-    if (messageRef.current) messageRef.current.innerHTML = 'Complete';
-
-  }
-
-
-  const handleReverseVideoAndDownload = async (file: File) => {
-    if (messageRef.current) messageRef.current.innerHTML = 'Reversing video...';
-    const ffmpeg = ffmpegRef.current;
-    await ffmpeg.writeFile(file.name, await fetchFile(file));
-    await ffmpeg.exec(["-i", file.name, "-vf", "reverse", "reversed.mp4"]);
-
-    const reversedVideo = await ffmpeg.readFile("reversed.mp4");
-    downloadBlob(reversedVideo as Uint8Array<ArrayBufferLike>, `${file.name.split('.')[0]}_reversed.mp4`, 'video/mp4');
-
-    await ffmpeg.deleteFile("reversed.mp4");
-    await ffmpeg.deleteFile(file.name);
-
-    if (messageRef.current) messageRef.current.innerHTML = 'Complete';
-  }
-
-
+  };
 
   useEffect(() => {
     if (!loaded) {
@@ -160,7 +238,7 @@ const Video = () => {
   }, [loaded]);
 
   return loaded ? (
-    <div className="flex flex-col items-center justify-center gap-4">
+    <div className="bg-zync-900 text-white flex flex-col items-center justify-center gap-4">
       <div className="flex flex-row items-center justify-center gap-4">
         <label htmlFor="uploader" className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
           {file ? "Change video" : "Select a video"}
@@ -185,26 +263,25 @@ const Video = () => {
         )}
       </div>
       <p ref={messageRef}></p>
-      {file && (<div className="flex flex-row items-center justify-center gap-4">
-        <button className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" onClick={() => {
-          handleExtractFramesAndDownload(1, file);
-        }}>Extract first frame</button>
-        <button className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" onClick={() => {
-          handleExtractFramesAndDownload(30, file);
-        }}>Extract 30 frames</button>
-        <button className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" onClick={() => {
-          handleReverseVideoAndDownload(file);
-        }}>Reverse Video</button>
-      </div>
+
+      {file && (
+        <>
+          <VideoPlayer
+            file={file}
+            onFrameExtracted={handleFrameExtracted}
+            onVideoCut={handleVideoCut}
+            onVideoCutReversed={handleVideoCutReversed}
+            onExtractMultipleFrames={handleExtractMultipleFrames}
+          />
+        </>
       )}
-      {frames > -1 && (
+
+      {/* {frames > -1 && (
         <>
           <br />
           <progress className="nes-progress is-primary" value={frames} max={FRAMES - 1}></progress>
-          <br />
-          <p>{`Extracted ${frames} frames`}</p>
         </>
-      )}
+      )} */}
       {datahuman && (
         <InfoTable data={datahuman} />
       )}
@@ -228,7 +305,6 @@ const Video = () => {
       <p>No video selected</p>
     </div>
   )
-
 }
 
 export default Video;
