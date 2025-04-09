@@ -1,2 +1,4 @@
 
-# ffmpeg-video-to-frames
+# Video Editor local
+
+POC using [ffmpeg WASM](https://ffmpegwasm.netlify.app/) on the browser
