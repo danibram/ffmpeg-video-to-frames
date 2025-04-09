@@ -26,7 +26,7 @@ export default function Home() {
       >
         <i className="nes-octocat animate"></i>
       </a>
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
+      <main className="flex flex-col gap-[32px] row-start-2 items-center max-w-4xl">
         <h1 className="text-2xl">Video Editor</h1>
         <Video />
       </main>
