@@ -14,7 +14,6 @@ const Video = () => {
   const [isLoading, setIsLoading] = useState(false);
   const ffmpegRef = useRef(new FFmpeg());
   const messageRef = useRef<HTMLParagraphElement | null>(null);
-  const [frames, setFrames] = useState(-1);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [datahuman, setDatahuman] = useState<FlattenedObject[] | null>(null);
   const load = async () => {
@@ -257,7 +256,7 @@ const Video = () => {
               setLoaded(false);
               setFile(null);
               setDatahuman(null);
-              setFrames(-1);
+              // setFrames(-1);
             }}>X</button>
           </>
         )}
