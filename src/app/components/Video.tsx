@@ -253,7 +253,7 @@ const Video = () => {
 
 
         // Add frame to zip
-        zip.file(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`, frame);
+        zip.file(`frame_${i.toString().padStart(3, '0')}.webp`, frame);
         console.log(`Successfully extracted frame ${i + 1} using standard method`);
 
         // Clean up the frame file
