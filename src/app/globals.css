@@ -1,13 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@font-face {
+/* @font-face {
   font-family: "pc";
   src: url("/PrintChar21.woff2") format("woff2"), url("/PrintChar21.woff") format("woff"), url("/PrintChar21.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
-}
+} */
 
 .nes-balloon,
 .nes-balloon.is-dark,
@@ -187,8 +187,7 @@ input[type="file"] {
 }
 
 @theme inline {
-  --font-sans: 'pc'
-    --radius-sm: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
@@ -308,9 +307,9 @@ input[type="file"] {
 }
 
 body {
-  font-family: 'pc';
+  font-family: var(--pc-font);
+  ;
 }
-
 
 .nes-octocat {
   position: relative;
