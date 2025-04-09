@@ -43,18 +43,47 @@ const Video = () => {
       // Write the file to FFmpeg's virtual filesystem
       await writeFile(name, file);
 
-      // Extract frame at the specified time using FFmpeg
-      await ffmpeg.exec([
-        "-ss", timestamp.toString(),
-        "-i", name,
-        "-frames:v", "1",
-        "-q:v", "2",
-        "extracted_frame.webp"
-      ]);
+      // Get video duration info
+      const probeResult = await runFFprobe(name);
+      let videoDuration = 0;
+
+      try {
+        if (probeResult.format && typeof probeResult.format === 'object' && 'duration' in probeResult.format) {
+          videoDuration = Number(probeResult.format.duration);
+        }
+      } catch (err) {
+        console.warn('Could not determine video duration:', err);
+      }
+
+      // Check if this is the last frame of the video
+      const isLastFrame = videoDuration > 0 && Math.abs(timestamp - videoDuration) < 0.2;
+
+      if (isLastFrame) {
+        console.log('Extracting last frame using sseof parameter');
+        // Use the -sseof parameter which is better for extracting the last frame
+        await ffmpeg.exec([
+          "-sseof", "-0.1", // Seek 0.1 seconds before the end of file
+          "-i", name,
+          "-update", "1",
+          "-vframes", "1",
+          "-q:v", "2",
+          "extracted_frame.webp"
+        ]);
+      } else {
+        // Normal case - extract frame at the specified time
+        await ffmpeg.exec([
+          "-ss", timestamp.toString(),
+          "-i", name,
+          "-frames:v", "1",
+          "-q:v", "2",
+          "extracted_frame.webp"
+        ]);
+      }
 
       // Read the extracted frame
       const frameData = await ffmpeg.readFile("extracted_frame.webp");
 
+      // Use the original data
       const blob = new Blob([frameData], { type: 'image/webp' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -72,7 +101,7 @@ const Video = () => {
       if (messageRef.current) messageRef.current.innerHTML = `Extracted frame at ${timestamp.toFixed(2)}s`;
     } catch (error) {
       console.error('Error extracting frame:', error);
-      if (messageRef.current) messageRef.current.innerHTML = 'Error extracting frame';
+      if (messageRef.current) messageRef.current.innerHTML = `Error extracting frame: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   };
 
@@ -191,6 +220,18 @@ const Video = () => {
       // Write the input file to FFmpeg's virtual filesystem
       await writeFile(name, file);
 
+      // Get video duration info
+      const probeResult = await runFFprobe(name);
+      let videoDuration = 0;
+
+      try {
+        if (probeResult.format && typeof probeResult.format === 'object' && 'duration' in probeResult.format) {
+          videoDuration = Number(probeResult.format.duration);
+        }
+      } catch (err) {
+        console.warn('Could not determine video duration:', err);
+      }
+
       // Calculate time step between frames
       const timeStep = (endTime - startTime) / (numFrames - 1);
 
@@ -207,20 +248,40 @@ const Video = () => {
           messageRef.current.innerHTML = `Extracting frame ${i + 1}/${numFrames} at ${timestamp}s`;
         }
 
-        // Extract frame at the specified time
-        await ffmpeg.exec([
-          "-ss", timestamp,
-          "-i", name,
-          "-frames:v", "1",
-          "-q:v", "2",
-          `frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`
-        ]);
+        // Check if this is the last frame or very close to the end
+        const isLastOrNearLastFrame = (i === numFrames - 1) ||
+          (videoDuration > 0 && Math.abs(frameTime - videoDuration) < 0.2);
+
+        // Use different extraction method based on frame position
+        if (isLastOrNearLastFrame && videoDuration > 0) {
+          console.log(`Frame ${i + 1} is near the end, using sseof method`);
+          // For the last frame, use the -sseof parameter which is better for extracting it
+          await ffmpeg.exec([
+            "-sseof", "-0.1",  // 0.1 seconds from the end
+            "-i", name,
+            "-update", "1",
+            "-vframes", "1",
+            "-q:v", "2",
+            `frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`
+          ]);
+        } else {
+          // Standard method for most frames
+          await ffmpeg.exec([
+            "-ss", timestamp,
+            "-i", name,
+            "-frames:v", "1",
+            "-q:v", "2",
+            `frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`
+          ]);
+        }
 
         // Read the extracted frame
         const frame = await ffmpeg.readFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`);
 
+
         // Add frame to zip
         zip.file(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`, frame);
+        console.log(`Successfully extracted frame ${i + 1} using standard method`);
 
         // Clean up the frame file
         await deleteFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`);
@@ -243,7 +304,7 @@ const Video = () => {
       if (messageRef.current) messageRef.current.innerHTML = 'Frames extracted and downloaded!';
     } catch (error) {
       console.error('Error extracting frames:', error);
-      if (messageRef.current) messageRef.current.innerHTML = 'Error extracting frames';
+      if (messageRef.current) messageRef.current.innerHTML = `Error extracting frames: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   };
 
