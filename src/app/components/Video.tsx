@@ -4,16 +4,16 @@ import JSZip from 'jszip';
 import { useRef, useState } from "react";
 import { useFFmpeg } from "../contexts/FFmpegContext";
 import { fileToBlobDownload } from "../utils/fileToBlobDownload";
-import { flattenObject, type FlattenedObject } from "../utils/flattenObject";
+import { flattenObject } from '../utils/flattenObject';
 import { InfoTable } from "./InfoTable";
-import { VideoPlayer } from "./VideoPlayer";
+import { VideoEditor } from "./VideoEditor";
 
 const Video = () => {
   const [file, setFile] = useState<File | null>(null);
   const { loaded, isLoading } = useFFmpeg();
   const messageRef = useRef<HTMLParagraphElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const [datahuman, setDatahuman] = useState<FlattenedObject[] | null>(null);
+  const [videoInfo, setVideoInfo] = useState<Record<string, unknown> | null>(null);
   const { writeFile, runFFprobe, deleteFile, ffmpeg } = useFFmpeg();
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,7 +26,7 @@ const Video = () => {
 
       await writeFile(name, file);
       const probeResult = await runFFprobe(name);
-      setDatahuman(flattenObject(probeResult));
+      setVideoInfo(probeResult);
       await deleteFile(name);
 
       if (messageRef.current) messageRef.current.innerHTML = 'Ready to go!';
@@ -45,16 +45,7 @@ const Video = () => {
       await writeFile(name, file);
 
       // Get video duration info
-      const probeResult = await runFFprobe(name);
-      let videoDuration = 0;
-
-      try {
-        if (probeResult.format && typeof probeResult.format === 'object' && 'duration' in probeResult.format) {
-          videoDuration = Number(probeResult.format.duration);
-        }
-      } catch (err) {
-        console.warn('Could not determine video duration:', err);
-      }
+      const videoDuration = videoInfo && (videoInfo.format && typeof videoInfo.format === 'object' && 'duration' in videoInfo.format) ? Number(videoInfo.format.duration) : 0;
 
       // Check if this is the last frame of the video
       const isLastFrame = videoDuration > 0 && Math.abs(timestamp - videoDuration) < 0.2;
@@ -67,8 +58,8 @@ const Video = () => {
           "-i", name,
           "-update", "1",
           "-vframes", "1",
-          "-q:v", "2",
-          "extracted_frame.webp"
+          "-q:v", "1",
+          "extracted_frame.png"
         ]);
       } else {
         // Normal case - extract frame at the specified time
@@ -76,19 +67,19 @@ const Video = () => {
           "-ss", timestamp.toString(),
           "-i", name,
           "-frames:v", "1",
-          "-q:v", "2",
-          "extracted_frame.webp"
+          "-q:v", "1",
+          "extracted_frame.png"
         ]);
       }
 
       // Read the extracted frame
-      const frameData = await ffmpeg.readFile("extracted_frame.webp");
+      const frameData = await ffmpeg.readFile("extracted_frame.png");
 
       // Use the original data
       fileToBlobDownload(frameData, file.name, 'image/webp', `frame_${timestamp.toFixed(2)}.webp`);
 
       // Clean up
-      await deleteFile("extracted_frame.webp");
+      await deleteFile("extracted_frame.png");
       await deleteFile(name);
 
       if (messageRef.current) messageRef.current.innerHTML = `Extracted frame at ${timestamp.toFixed(2)}s`;
@@ -189,21 +180,13 @@ const Video = () => {
 
     try {
       const { name } = file;
+      const extension = "png" //"webp"
 
       // Write the input file to FFmpeg's virtual filesystem
       await writeFile(name, file);
 
       // Get video duration info
-      const probeResult = await runFFprobe(name);
-      let videoDuration = 0;
-
-      try {
-        if (probeResult.format && typeof probeResult.format === 'object' && 'duration' in probeResult.format) {
-          videoDuration = Number(probeResult.format.duration);
-        }
-      } catch (err) {
-        console.warn('Could not determine video duration:', err);
-      }
+      const videoDuration = videoInfo && (videoInfo.format && typeof videoInfo.format === 'object' && 'duration' in videoInfo.format) ? Number(videoInfo.format.duration) : 0;
 
       // Calculate time step between frames
       const timeStep = (endTime - startTime) / (numFrames - 1);
@@ -234,8 +217,8 @@ const Video = () => {
             "-i", name,
             "-update", "1",
             "-vframes", "1",
-            "-q:v", "2",
-            `frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`
+            "-q:v", "1",
+            `frame_${i.toString().padStart(3, '0')}_${timestamp}.${extension}`
           ]);
         } else {
           // Standard method for most frames
@@ -243,21 +226,21 @@ const Video = () => {
             "-ss", timestamp,
             "-i", name,
             "-frames:v", "1",
-            "-q:v", "2",
-            `frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`
+            "-q:v", "1",
+            `frame_${i.toString().padStart(3, '0')}_${timestamp}.${extension}`
           ]);
         }
 
         // Read the extracted frame
-        const frame = await ffmpeg.readFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`);
+        const frame = await ffmpeg.readFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.${extension}`);
 
 
         // Add frame to zip
-        zip.file(`frame_${i.toString().padStart(3, '0')}.webp`, frame);
+        zip.file(`frame_${i.toString().padStart(3, '0')}.${extension}`, frame);
         console.log(`Successfully extracted frame ${i + 1} using standard method`);
 
         // Clean up the frame file
-        await deleteFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.webp`);
+        await deleteFile(`frame_${i.toString().padStart(3, '0')}_${timestamp}.${extension}`);
       }
 
       // Generate and download the zip file
@@ -296,7 +279,7 @@ const Video = () => {
               if (fileRef.current) {
                 fileRef.current.value = ''
               }
-              setDatahuman(null);
+              setVideoInfo(null);
             }}>X</button>
           </>
         )}
@@ -305,7 +288,7 @@ const Video = () => {
 
       {file && (
         <>
-          <VideoPlayer
+          <VideoEditor
             file={file}
             onFrameExtracted={handleFrameExtracted}
             onVideoCut={handleVideoCut}
@@ -315,8 +298,8 @@ const Video = () => {
         </>
       )}
 
-      {datahuman && (
-        <InfoTable data={datahuman} />
+      {videoInfo && (
+        <InfoTable data={flattenObject(videoInfo)} />
       )}
     </div>
   ) : isLoading ? (

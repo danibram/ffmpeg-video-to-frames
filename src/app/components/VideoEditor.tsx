@@ -5,7 +5,7 @@ import { Slider } from "@/components/ui/slider";
 import { Download, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-interface VideoPlayerProps {
+interface VideoEditorProps {
     file: File;
     onFrameExtracted?: (timestamp: number) => void;
     onVideoCut?: (startTime: number, endTime: number) => void;
@@ -13,7 +13,7 @@ interface VideoPlayerProps {
     onExtractMultipleFrames?: (startTime: number, endTime: number, numFrames: number) => void;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({
+export const VideoEditor: React.FC<VideoEditorProps> = ({
     file,
     onFrameExtracted,
     onVideoCut,
@@ -357,7 +357,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         className="absolute top-0 bottom-0 w-0.5 bg-white"
                         style={{ left: `${(currentTime / duration) * 100}%` }}
                     >
-                        <div className="w-3 h-3 bg-white rounded-full -ml-1.5 -mt-1.5" />
                     </div>
 
                     {/* Start marker */}
@@ -366,8 +365,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         style={{ left: `${(startTime / duration) * 100}%` }}
                         onMouseDown={handleStartMarkerMouseDown}
                     >
-                        <div className="absolute top-0 -ml-2 w-4 h-4 bg-blue-500 rounded-sm" />
-                        <div className="absolute bottom-0 -ml-2 w-4 h-4 bg-blue-500 rounded-sm" />
+                        <div className="absolute top-0 w-4 h-1 bg-blue-500" />
+                        <div className="absolute bottom-0 w-4 h-1 bg-blue-500" />
                     </div>
 
                     {/* End marker */}
@@ -376,17 +375,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         style={{ left: `${(endTime / duration) * 100}%` }}
                         onMouseDown={handleEndMarkerMouseDown}
                     >
-                        <div className="absolute top-0 -ml-2 w-4 h-4 bg-blue-500 rounded-sm" />
-                        <div className="absolute bottom-0 -ml-2 w-4 h-4 bg-blue-500 rounded-sm" />
+                        <div className="absolute top-0 -ml-3 w-4 h-1 bg-blue-500" />
+                        <div className="absolute bottom-0 -ml-3 w-4 h-1 bg-blue-500" />
                     </div>
-
-                    {/* Selected time marker */}
-                    {/* {selectedTime !== null && (
-                        <div
-                            className="absolute top-0 bottom-0 w-1 bg-yellow-500"
-                            style={{ left: `${(selectedTime / duration) * 100}%` }}
-                        />
-                    )} */}
 
                     {/* Time indicators */}
                     <div className="absolute -bottom-6 left-0 text-xs text-zinc-400">{formatTime(startTime)}</div>
