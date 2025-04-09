@@ -1,5 +1,6 @@
 import { Analytics } from "@vercel/analytics/react";
 import type { Metadata } from "next";
+import { FFmpegProvider } from "./contexts/FFmpegContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,9 @@ export default function RootLayout({
       <body
         className={`antialiased`}
       >
-        {children}
+        <FFmpegProvider>
+          {children}
+        </FFmpegProvider>
         <Analytics />
       </body>
     </html>

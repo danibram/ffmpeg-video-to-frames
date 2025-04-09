@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface VideoPlayerProps {
     file: File;
-    onFrameExtracted?: (frame: Uint8Array, timestamp: number) => void;
+    onFrameExtracted?: (timestamp: number) => void;
     onVideoCut?: (startTime: number, endTime: number) => void;
     onVideoCutReversed?: (startTime: number, endTime: number) => void;
     onExtractMultipleFrames?: (startTime: number, endTime: number, numFrames: number) => void;
@@ -21,7 +21,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     onExtractMultipleFrames,
 }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -255,61 +254,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
 
     const handleExtractFrame = async () => {
-        if (selectedTime === null) return;
-        await extractFrameAtTime(selectedTime);
-    };
-
-    const extractFrameAtTime = async (time: number) => {
-        if (!videoRef.current || !canvasRef.current) return;
-
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-
-        if (!context) return;
-
-        // Save current time
-        const originalTime = video.currentTime;
-
-        // Set video to the specified time
-        video.currentTime = time;
-
-        // Wait for the video to seek to the new time
-        await new Promise<void>((resolve) => {
-            const seekedHandler = () => {
-                // Set canvas dimensions to match video
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-
-                // Draw current frame to canvas
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                // Restore original time
-                video.currentTime = originalTime;
-
-                // Remove the event listener
-                video.removeEventListener('seeked', seekedHandler);
-                resolve();
-            };
-
-            video.addEventListener('seeked', seekedHandler);
-        });
-
-        // Convert canvas to blob
-        const blob = await new Promise<Blob>((resolve) => {
-            canvas.toBlob((blob) => {
-                if (blob) resolve(blob);
-            }, 'image/webp');
-        });
-
-        // Convert blob to Uint8Array
-        const arrayBuffer = await blob.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-
-        // Notify parent component
-        if (onFrameExtracted) {
-            onFrameExtracted(uint8Array, time);
-        }
+        if (selectedTime === null || !onFrameExtracted) return;
+        onFrameExtracted(selectedTime);
     };
 
     const handleCutVideo = () => {
@@ -540,6 +486,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 {canExtractFrame && (
                     <Button
                         onClick={handleExtractFrame}
+                        disabled={!onFrameExtracted}
                         variant="outline"
                     >
                         Extract Frame
@@ -560,8 +507,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     </Button>
                 </div>
             </div>
-
-            <canvas ref={canvasRef} className="hidden" />
         </div>
     );
 };
