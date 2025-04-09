@@ -55,16 +55,11 @@ const Video = () => {
       // Read the extracted frame
       const frameData = await ffmpeg.readFile("extracted_frame.webp");
 
-      // Create a zip file
-      const zip = new JSZip();
-      zip.file(`frame_${timestamp.toFixed(2)}.webp`, frameData);
-
-      // Generate and download the zip file
-      const content = await zip.generateAsync({ type: 'blob' });
-      const url = window.URL.createObjectURL(content);
+      const blob = new Blob([frameData], { type: 'image/webp' });
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `frame_${timestamp.toFixed(2)}.zip`;
+      a.download = `frame_${timestamp.toFixed(2)}.webp`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
