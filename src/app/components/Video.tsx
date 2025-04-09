@@ -3,6 +3,7 @@
 import JSZip from 'jszip';
 import { useRef, useState } from "react";
 import { useFFmpeg } from "../contexts/FFmpegContext";
+import { fileToBlobDownload } from "../utils/fileToBlobDownload";
 import { flattenObject, type FlattenedObject } from "../utils/flattenObject";
 import { InfoTable } from "./InfoTable";
 import { VideoPlayer } from "./VideoPlayer";
@@ -32,7 +33,7 @@ const Video = () => {
     }
   };
 
-  const extractFrameAtTime = async (timestamp: number) => {
+  const handleFrameExtracted = async (timestamp: number) => {
     if (!file || !ffmpeg) return;
 
     if (messageRef.current) messageRef.current.innerHTML = `Extracting frame at ${timestamp.toFixed(2)}s...`;
@@ -84,15 +85,7 @@ const Video = () => {
       const frameData = await ffmpeg.readFile("extracted_frame.webp");
 
       // Use the original data
-      const blob = new Blob([frameData], { type: 'image/webp' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `frame_${timestamp.toFixed(2)}.webp`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      fileToBlobDownload(frameData, file.name, 'image/webp', `frame_${timestamp.toFixed(2)}.webp`);
 
       // Clean up
       await deleteFile("extracted_frame.webp");
@@ -103,10 +96,6 @@ const Video = () => {
       console.error('Error extracting frame:', error);
       if (messageRef.current) messageRef.current.innerHTML = `Error extracting frame: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
-  };
-
-  const handleFrameExtracted = async (timestamp: number) => {
-    await extractFrameAtTime(timestamp);
   };
 
   const handleVideoCut = async (startTime: number, endTime: number) => {
@@ -135,15 +124,7 @@ const Video = () => {
       const cutVideo = await ffmpeg.readFile("cut_video.mp4");
 
       // Download the cut video
-      const blob = new Blob([cutVideo], { type: 'video/mp4' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${file.name.split('.')[0]}_cut.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      fileToBlobDownload(cutVideo, file.name, 'video/mp4', 'cut.mp4');
 
       // Clean up
       await deleteFile("cut_video.mp4");
@@ -187,15 +168,7 @@ const Video = () => {
       const cutReversedVideo = await ffmpeg.readFile("cut_reversed_video.mp4");
 
       // Download the cut and reversed video
-      const blob = new Blob([cutReversedVideo], { type: 'video/mp4' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${file.name.split('.')[0]}_cut_reversed.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      fileToBlobDownload(cutReversedVideo, file.name, 'video/mp4', 'cut_reversed.mp4');
 
       // Clean up
       await deleteFile("cut_video.mp4");
