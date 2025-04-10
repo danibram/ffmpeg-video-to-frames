@@ -3,575 +3,575 @@
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
-    Download,
-    Pause,
-    Play,
-    RotateCcw,
-    SkipBack,
-    SkipForward,
-    Volume2,
-    VolumeX,
+  Download,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface VideoEditorProps {
-    file: File;
-    onFrameExtracted?: (timestamp: number) => void;
-    onVideoCut?: (startTime: number, endTime: number) => void;
-    onVideoCutReversed?: (startTime: number, endTime: number) => void;
-    onExtractMultipleFrames?: (
-        startTime: number,
-        endTime: number,
-        numFrames: number,
-    ) => void;
+  file: File;
+  onFrameExtracted?: (timestamp: number) => void;
+  onVideoCut?: (startTime: number, endTime: number) => void;
+  onVideoCutReversed?: (startTime: number, endTime: number) => void;
+  onExtractMultipleFrames?: (
+    startTime: number,
+    endTime: number,
+    numFrames: number,
+  ) => void;
 }
 
 export const VideoEditor: React.FC<VideoEditorProps> = ({
-    file,
-    onFrameExtracted,
-    onVideoCut,
-    onVideoCutReversed,
-    onExtractMultipleFrames,
+  file,
+  onFrameExtracted,
+  onVideoCut,
+  onVideoCutReversed,
+  onExtractMultipleFrames,
 }) => {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const [duration, setDuration] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [volume, setVolume] = useState(1);
-    const [isMuted, setIsMuted] = useState(false);
-    const [startTime, setStartTime] = useState(0);
-    const [endTime, setEndTime] = useState(0);
-    const [isDraggingStart, setIsDraggingStart] = useState(false);
-    const [isDraggingEnd, setIsDraggingEnd] = useState(false);
-    const [selectedTime, setSelectedTime] = useState<number | null>(null);
-    const [canExtractFrame, setCanExtractFrame] = useState(false);
-    const [isFocused, setIsFocused] = useState(false);
-    const [numFramesToExtract, setNumFramesToExtract] = useState(10);
-    const [isExtractingFrames, setIsExtractingFrames] = useState(false);
-    const [extractionProgress, setExtractionProgress] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [startTime, setStartTime] = useState(0);
+  const [endTime, setEndTime] = useState(0);
+  const [isDraggingStart, setIsDraggingStart] = useState(false);
+  const [isDraggingEnd, setIsDraggingEnd] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<number | null>(null);
+  const [canExtractFrame, setCanExtractFrame] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [numFramesToExtract, setNumFramesToExtract] = useState(10);
+  const [isExtractingFrames, setIsExtractingFrames] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState(0);
 
-    useEffect(() => {
-        if (videoRef.current) {
-            const video = videoRef.current;
-            video.src = URL.createObjectURL(file);
+  useEffect(() => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      video.src = URL.createObjectURL(file);
 
-            const handleLoadedMetadata = () => {
-                setDuration(video.duration);
-                setEndTime(video.duration);
-            };
+      const handleLoadedMetadata = () => {
+        setDuration(video.duration);
+        setEndTime(video.duration);
+      };
 
-            video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
-            return () => {
-                video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-                URL.revokeObjectURL(video.src);
-            };
+      return () => {
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        URL.revokeObjectURL(video.src);
+      };
+    }
+  }, [file]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+
+      const handleTimeUpdate = () => {
+        setCurrentTime(video.currentTime);
+
+        // Stop playback if we reach the end marker during playback
+        if (video.currentTime >= endTime) {
+          video.pause();
+          video.currentTime = endTime;
+          setIsPlaying(false);
         }
-    }, [file]);
+      };
 
-    useEffect(() => {
-        if (videoRef.current) {
-            const video = videoRef.current;
+      video.addEventListener('timeupdate', handleTimeUpdate);
 
-            const handleTimeUpdate = () => {
-                setCurrentTime(video.currentTime);
+      return () => {
+        video.removeEventListener('timeupdate', handleTimeUpdate);
+      };
+    }
+  }, [endTime]);
 
-                // Stop playback if we reach the end marker during playback
-                if (video.currentTime >= endTime) {
-                    video.pause();
-                    video.currentTime = endTime;
-                    setIsPlaying(false);
-                }
-            };
+  // Check if we can extract a frame
+  useEffect(() => {
+    setCanExtractFrame(selectedTime !== null);
+  }, [selectedTime]);
 
-            video.addEventListener('timeupdate', handleTimeUpdate);
-
-            return () => {
-                video.removeEventListener('timeupdate', handleTimeUpdate);
-            };
-        }
-    }, [endTime]);
-
-    // Check if we can extract a frame
-    useEffect(() => {
-        setCanExtractFrame(selectedTime !== null);
-    }, [selectedTime]);
-
-
-    const togglePlay = useCallback(() => {
-        if (videoRef.current) {
-            if (isPlaying) {
-                videoRef.current.pause();
-            } else {
-                // If current time is at or past the end marker during playback, reset to start marker
-                if (currentTime >= endTime) {
-                    videoRef.current.currentTime = startTime;
-                }
-
-                // If current time is before start marker, set to start marker
-                if (currentTime < startTime) {
-                    videoRef.current.currentTime = startTime;
-                }
-
-                videoRef.current.play();
-            }
-            setIsPlaying(!isPlaying);
-        }
-    }, [isPlaying, currentTime, endTime, startTime]);
-
-    // Keyboard navigation
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (!isFocused) return;
-
-            if (videoRef.current) {
-                const video = videoRef.current;
-                // Frame step (assuming 30fps) or second step when shift is pressed
-                const frameStep = 1 / 30; // One frame at 30fps
-                const secondStep = 1; // One second
-                const step = e.shiftKey ? secondStep : frameStep;
-
-                switch (e.key) {
-                    case 'ArrowLeft': {
-                        e.preventDefault();
-                        const newTimeLeft = Math.max(startTime, currentTime - step);
-                        video.currentTime = newTimeLeft;
-                        setCurrentTime(newTimeLeft);
-                        setSelectedTime(newTimeLeft);
-                        break;
-                    }
-                    case 'ArrowRight': {
-                        e.preventDefault();
-                        const newTimeRight = Math.min(endTime, currentTime + step);
-                        video.currentTime = newTimeRight;
-                        setCurrentTime(newTimeRight);
-                        setSelectedTime(newTimeRight);
-                        break;
-                    }
-                    case 'Home': {
-                        e.preventDefault();
-                        video.currentTime = startTime;
-                        setCurrentTime(startTime);
-                        setSelectedTime(startTime);
-                        break;
-                    }
-                    case 'End': {
-                        e.preventDefault();
-                        video.currentTime = endTime;
-                        setCurrentTime(endTime);
-                        setSelectedTime(endTime);
-                        break;
-                    }
-                    case ' ': {
-                        e.preventDefault();
-                        togglePlay();
-                        break;
-                    }
-                }
-            }
-        };
-
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [currentTime, startTime, endTime, togglePlay, isFocused]);
-
-
-    const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (videoRef.current) {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const offsetX = e.clientX - rect.left;
-            const clickPosition = (offsetX / rect.width) * duration;
-
-            videoRef.current.currentTime = clickPosition;
-            setCurrentTime(clickPosition);
-            setSelectedTime(clickPosition);
-        }
-    };
-
-    const handleStartMarkerMouseDown = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setIsDraggingStart(true);
-    };
-
-    const handleEndMarkerMouseDown = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setIsDraggingEnd(true);
-    };
-
-    useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if ((isDraggingStart || isDraggingEnd) && videoRef.current) {
-                const rect = videoRef.current.getBoundingClientRect();
-                const offsetX = e.clientX - rect.left;
-                const newPosition = Math.max(
-                    0,
-                    Math.min((offsetX / rect.width) * duration, duration),
-                );
-
-                if (isDraggingStart) {
-                    const newStartTime = Math.min(newPosition, endTime - 0.5);
-                    setStartTime(newStartTime);
-                    if (currentTime < newStartTime) {
-                        setCurrentTime(newStartTime);
-                        if (videoRef.current) videoRef.current.currentTime = newStartTime;
-                    }
-                }
-
-                if (isDraggingEnd) {
-                    const newEndTime = Math.max(newPosition, startTime + 0.5);
-                    setEndTime(newEndTime);
-                    if (currentTime > newEndTime) {
-                        setCurrentTime(newEndTime);
-                        if (videoRef.current) videoRef.current.currentTime = newEndTime;
-                    }
-                }
-            }
-        };
-
-        const handleMouseUp = () => {
-            setIsDraggingStart(false);
-            setIsDraggingEnd(false);
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-
-        return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [
-        isDraggingStart,
-        isDraggingEnd,
-        duration,
-        startTime,
-        endTime,
-        currentTime,
-    ]);
-
-    const handleVolumeChange = (value: number[]) => {
-        const newVolume = value[0];
-        setVolume(newVolume);
-        if (videoRef.current) {
-            videoRef.current.volume = newVolume;
+  const togglePlay = useCallback(() => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        // If current time is at or past the end marker during playback, reset to start marker
+        if (currentTime >= endTime) {
+          videoRef.current.currentTime = startTime;
         }
 
-        if (newVolume === 0) {
-            setIsMuted(true);
-        } else {
-            setIsMuted(false);
+        // If current time is before start marker, set to start marker
+        if (currentTime < startTime) {
+          videoRef.current.currentTime = startTime;
         }
-    };
 
-    const toggleMute = () => {
-        if (videoRef.current) {
-            if (isMuted) {
-                videoRef.current.volume = volume;
-                setIsMuted(false);
-            } else {
-                videoRef.current.volume = 0;
-                setIsMuted(true);
-            }
-        }
-    };
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  }, [isPlaying, currentTime, endTime, startTime]);
 
-    const formatTime = (time: number) => {
-        const minutes = Math.floor(time / 60);
-        const seconds = Math.floor(time % 60);
-        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    };
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isFocused) return;
 
-    const handleExtractFrame = async () => {
-        if (selectedTime === null || !onFrameExtracted) return;
-        onFrameExtracted(selectedTime);
-    };
+      if (videoRef.current) {
+        const video = videoRef.current;
+        // Frame step (assuming 30fps) or second step when shift is pressed
+        const frameStep = 1 / 30; // One frame at 30fps
+        const secondStep = 1; // One second
+        const step = e.shiftKey ? secondStep : frameStep;
 
-    const handleCutVideo = () => {
-        if (onVideoCut) {
-            onVideoCut(startTime, endTime);
-        }
-    };
-
-    const handleCutReversedVideo = () => {
-        if (onVideoCutReversed) {
-            onVideoCutReversed(startTime, endTime);
-        }
-    };
-
-    const jumpToStart = () => {
-        if (videoRef.current) {
-            videoRef.current.currentTime = startTime;
+        switch (e.key) {
+          case 'ArrowLeft': {
+            e.preventDefault();
+            const newTimeLeft = Math.max(startTime, currentTime - step);
+            video.currentTime = newTimeLeft;
+            setCurrentTime(newTimeLeft);
+            setSelectedTime(newTimeLeft);
+            break;
+          }
+          case 'ArrowRight': {
+            e.preventDefault();
+            const newTimeRight = Math.min(endTime, currentTime + step);
+            video.currentTime = newTimeRight;
+            setCurrentTime(newTimeRight);
+            setSelectedTime(newTimeRight);
+            break;
+          }
+          case 'Home': {
+            e.preventDefault();
+            video.currentTime = startTime;
             setCurrentTime(startTime);
             setSelectedTime(startTime);
-        }
-    };
-
-    const jumpToEnd = () => {
-        if (videoRef.current) {
-            videoRef.current.currentTime = endTime;
+            break;
+          }
+          case 'End': {
+            e.preventDefault();
+            video.currentTime = endTime;
             setCurrentTime(endTime);
             setSelectedTime(endTime);
+            break;
+          }
+          case ' ': {
+            e.preventDefault();
+            togglePlay();
+            break;
+          }
         }
+      }
     };
 
-    const handleExtractMultipleFrames = async () => {
-        if (!onExtractMultipleFrames) return;
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [currentTime, startTime, endTime, togglePlay, isFocused]);
 
-        setIsExtractingFrames(true);
-        setExtractionProgress(0);
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (videoRef.current) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const clickPosition = (offsetX / rect.width) * duration;
 
-        // Call the parent component's function to extract multiple frames
-        onExtractMultipleFrames(startTime, endTime, numFramesToExtract);
+      videoRef.current.currentTime = clickPosition;
+      setCurrentTime(clickPosition);
+      setSelectedTime(clickPosition);
+    }
+  };
 
-        // Simulate progress updates (since we don't have direct access to the actual progress)
-        const progressInterval = setInterval(() => {
-            setExtractionProgress((prev) => {
-                if (prev >= 100) {
-                    clearInterval(progressInterval);
-                    setIsExtractingFrames(false);
-                    return 100;
-                }
-                return prev + 5;
-            });
-        }, 200);
+  const handleStartMarkerMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDraggingStart(true);
+  };
 
-        // Clean up interval after 4 seconds (assuming extraction takes about that long)
-        setTimeout(() => {
-            clearInterval(progressInterval);
-            setIsExtractingFrames(false);
-        }, 4000);
+  const handleEndMarkerMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDraggingEnd(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if ((isDraggingStart || isDraggingEnd) && videoRef.current) {
+        const rect = videoRef.current.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left;
+        const newPosition = Math.max(
+          0,
+          Math.min((offsetX / rect.width) * duration, duration),
+        );
+
+        if (isDraggingStart) {
+          const newStartTime = Math.min(newPosition, endTime - 0.5);
+          setStartTime(newStartTime);
+          if (currentTime < newStartTime) {
+            setCurrentTime(newStartTime);
+            if (videoRef.current) videoRef.current.currentTime = newStartTime;
+          }
+        }
+
+        if (isDraggingEnd) {
+          const newEndTime = Math.max(newPosition, startTime + 0.5);
+          setEndTime(newEndTime);
+          if (currentTime > newEndTime) {
+            setCurrentTime(newEndTime);
+            if (videoRef.current) videoRef.current.currentTime = newEndTime;
+          }
+        }
+      }
     };
 
-    return (
-        <div className="flex flex-col w-full rounded-lg shadow-xl">
-            {/* Video Player */}
-            <div className="relative aspect-video bg-black rounded-md overflow-hidden mb-4">
-                <video ref={videoRef} className="w-full h-full">
-                    <track kind="captions" />
-                </video>
-            </div>
+    const handleMouseUp = () => {
+      setIsDraggingStart(false);
+      setIsDraggingEnd(false);
+    };
 
-            {/* Timeline */}
-            <div className="mb-4">
-                {/* biome-ignore lint/a11y/useKeyWithClickEvents: keyboard can be used to navigate */}
-                <div
-                    className="relative h-16 bg-zinc-800 rounded-md cursor-pointer"
-                    onClick={handleTimelineClick}
-                    onFocus={() => setIsFocused(true)}
-                    onBlur={() => setIsFocused(false)}
-                    role="slider"
-                    aria-label="Timeline"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round((currentTime / duration) * 100)}
-                    tabIndex={0}
-                >
-                    {/* Timeline background */}
-                    <div className="absolute inset-0 flex items-center px-2">
-                        {/* Generate frame markers */}
-                        {Array.from({ length: 10 }).map((_, index) => (
-                            // biome-ignore lint/suspicious/noArrayIndexKey: no other option
-                            <div key={`frame-marker-${index}`} className="h-8 border-l border-zinc-600 flex-grow" />
-                        ))}
-                    </div>
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
 
-                    {/* Selected region */}
-                    <div
-                        className="absolute h-full bg-blue-500/20"
-                        style={{
-                            left: `${(startTime / duration) * 100}%`,
-                            width: `${((endTime - startTime) / duration) * 100}%`,
-                        }}
-                    />
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [
+    isDraggingStart,
+    isDraggingEnd,
+    duration,
+    startTime,
+    endTime,
+    currentTime,
+  ]);
 
-                    {/* Playhead */}
-                    <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-white"
-                        style={{ left: `${(currentTime / duration) * 100}%` }}
-                    />
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
+    }
 
-                    {/* Start marker */}
-                    <div
-                        className="absolute top-0 bottom-0 w-1 bg-blue-500 cursor-ew-resize"
-                        style={{ left: `${(startTime / duration) * 100}%` }}
-                        onMouseDown={handleStartMarkerMouseDown}
-                    >
-                        <div className="absolute top-0 w-4 h-1 bg-blue-500" />
-                        <div className="absolute bottom-0 w-4 h-1 bg-blue-500" />
-                    </div>
+    if (newVolume === 0) {
+      setIsMuted(true);
+    } else {
+      setIsMuted(false);
+    }
+  };
 
-                    {/* End marker */}
-                    <div
-                        className="absolute top-0 bottom-0 w-1 bg-blue-500 cursor-ew-resize"
-                        style={{ left: `${(endTime / duration) * 100}%` }}
-                        onMouseDown={handleEndMarkerMouseDown}
-                    >
-                        <div className="absolute top-0 -ml-3 w-4 h-1 bg-blue-500" />
-                        <div className="absolute bottom-0 -ml-3 w-4 h-1 bg-blue-500" />
-                    </div>
+  const toggleMute = () => {
+    if (videoRef.current) {
+      if (isMuted) {
+        videoRef.current.volume = volume;
+        setIsMuted(false);
+      } else {
+        videoRef.current.volume = 0;
+        setIsMuted(true);
+      }
+    }
+  };
 
-                    {/* Time indicators */}
-                    <div className="absolute -bottom-6 left-0 text-xs text-zinc-400">
-                        {formatTime(startTime)}
-                    </div>
-                    <div className="absolute -bottom-6 right-0 text-xs text-zinc-400">
-                        {formatTime(duration)}
-                    </div>
-                </div>
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
-                {/* Keyboard navigation instructions */}
-                <div className="mt-6 text-xs text-zinc-400">
-                    <p>
-                        Keyboard controls: ← → (frame by frame), Shift+← → (second by
-                        second), Home/End, Space (play/pause)
-                    </p>
-                </div>
-            </div>
+  const handleExtractFrame = async () => {
+    if (selectedTime === null || !onFrameExtracted) return;
+    onFrameExtracted(selectedTime);
+  };
 
-            {/* Controls */}
-            <div className="flex items-center space-x-4 mb-4">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={togglePlay}
-                    className="text-white hover:bg-zinc-800"
-                >
-                    {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                </Button>
+  const handleCutVideo = () => {
+    if (onVideoCut) {
+      onVideoCut(startTime, endTime);
+    }
+  };
 
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={jumpToStart}
-                    className="text-white hover:bg-zinc-800"
-                >
-                    <SkipBack size={20} />
-                </Button>
+  const handleCutReversedVideo = () => {
+    if (onVideoCutReversed) {
+      onVideoCutReversed(startTime, endTime);
+    }
+  };
 
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={jumpToEnd}
-                    className="text-white hover:bg-zinc-800"
-                >
-                    <SkipForward size={20} />
-                </Button>
+  const jumpToStart = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = startTime;
+      setCurrentTime(startTime);
+      setSelectedTime(startTime);
+    }
+  };
 
-                <div className="text-sm text-white">
-                    {formatTime(currentTime)} / {formatTime(duration)}
-                </div>
+  const jumpToEnd = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = endTime;
+      setCurrentTime(endTime);
+      setSelectedTime(endTime);
+    }
+  };
 
-                <div className="flex items-center ml-auto">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={toggleMute}
-                        className="text-white hover:bg-zinc-800"
-                    >
-                        {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                    </Button>
+  const handleExtractMultipleFrames = async () => {
+    if (!onExtractMultipleFrames) return;
 
-                    <div className="w-24">
-                        <Slider
-                            value={[isMuted ? 0 : volume]}
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            onValueChange={handleVolumeChange}
-                            className="[&>span:first-child]:h-1.5 [&>span:first-child]:bg-zinc-700"
-                        />
-                    </div>
-                </div>
-            </div>
+    setIsExtractingFrames(true);
+    setExtractionProgress(0);
 
-            {/* Frame extraction controls */}
-            <div className="mb-4 p-4 bg-zinc-800 rounded-md">
-                <h3 className="text-white font-medium mb-2">Extract Multiple Frames</h3>
-                <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
-                        <label htmlFor="numFrames" className="text-white text-sm">
-                            Number of frames:
-                        </label>
-                        <input
-                            id="numFrames"
-                            type="number"
-                            min="1"
-                            max="100"
-                            value={numFramesToExtract}
-                            onChange={(e) =>
-                                setNumFramesToExtract(
-                                    Math.max(
-                                        1,
-                                        Math.min(100, Number.parseInt(e.target.value) || 1),
-                                    ),
-                                )
-                            }
-                            className="w-16 px-2 py-1 bg-zinc-700 text-white rounded border border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
+    // Call the parent component's function to extract multiple frames
+    onExtractMultipleFrames(startTime, endTime, numFramesToExtract);
 
-                    <Button
-                        onClick={handleExtractMultipleFrames}
-                        disabled={isExtractingFrames || !onExtractMultipleFrames}
-                        variant="outline"
-                        className="flex items-center"
-                    >
-                        <Download size={16} className="mr-1" />
-                        {isExtractingFrames
-                            ? `Extracting (${extractionProgress}%)`
-                            : 'Extract & Download'}
-                    </Button>
-                </div>
+    // Simulate progress updates (since we don't have direct access to the actual progress)
+    const progressInterval = setInterval(() => {
+      setExtractionProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+          setIsExtractingFrames(false);
+          return 100;
+        }
+        return prev + 5;
+      });
+    }, 200);
+    // Clean up interval after 4 seconds (assuming extraction takes about that long)
+    setTimeout(() => {
+      clearInterval(progressInterval);
+      setIsExtractingFrames(false);
+    }, 4000);
+  };
 
-                {isExtractingFrames && (
-                    <div className="mt-2 w-full bg-zinc-700 rounded-full h-2.5">
-                        <div
-                            className="bg-green-500 h-2.5 rounded-full transition-all duration-300"
-                            style={{ width: `${extractionProgress}%` }}
-                        />
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="flex flex-col w-full rounded-lg shadow-xl">
+      {/* Video Player */}
+      <div className="relative aspect-video bg-black rounded-md overflow-hidden mb-4">
+        <video ref={videoRef} className="w-full h-full">
+          <track kind="captions" />
+        </video>
+      </div>
 
-            {/* Cut controls */}
-            <div className="flex items-center space-x-4">
-                <div className="text-white text-sm">
-                    Selection:{' '}
-                    <span className="font-medium">
-                        {formatTime(startTime)} - {formatTime(endTime)}
-                    </span>
-                    <span className="text-zinc-400 ml-2">
-                        ({formatTime(endTime - startTime)})
-                    </span>
-                </div>
+      {/* Timeline */}
+      <div className="mb-4">
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: keyboard can be used to navigate */}
+        <div
+          className="relative h-16 bg-zinc-800 rounded-md cursor-pointer"
+          onClick={handleTimelineClick}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          role="slider"
+          aria-label="Timeline"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round((currentTime / duration) * 100)}
+          tabIndex={0}
+        >
+          {/* Timeline background */}
+          <div className="absolute inset-0 flex items-center px-2">
+            {/* Generate frame markers */}
+            {Array.from({ length: 10 }).map((_, index) => (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: no other option
+                key={`frame-marker-${index}`}
+                className="h-8 border-l border-zinc-600 flex-grow"
+              />
+            ))}
+          </div>
 
-                {canExtractFrame && (
-                    <Button
-                        onClick={handleExtractFrame}
-                        disabled={!onFrameExtracted}
-                        variant="outline"
-                    >
-                        Extract Frame
-                    </Button>
-                )}
+          {/* Selected region */}
+          <div
+            className="absolute h-full bg-blue-500/20"
+            style={{
+              left: `${(startTime / duration) * 100}%`,
+              width: `${((endTime - startTime) / duration) * 100}%`,
+            }}
+          />
 
-                <div className="flex space-x-2 ml-auto">
-                    <Button onClick={handleCutVideo} variant="outline">
-                        Cut Video
-                    </Button>
-                    <Button
-                        onClick={handleCutReversedVideo}
-                        variant="outline"
-                        className="flex items-center"
-                    >
-                        <RotateCcw size={16} className="mr-1" />
-                        Cut Reversed
-                    </Button>
-                </div>
-            </div>
+          {/* Playhead */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-white"
+            style={{ left: `${(currentTime / duration) * 100}%` }}
+          />
+
+          {/* Start marker */}
+          <div
+            className="absolute top-0 bottom-0 w-1 bg-blue-500 cursor-ew-resize"
+            style={{ left: `${(startTime / duration) * 100}%` }}
+            onMouseDown={handleStartMarkerMouseDown}
+          >
+            <div className="absolute top-0 w-4 h-1 bg-blue-500" />
+            <div className="absolute bottom-0 w-4 h-1 bg-blue-500" />
+          </div>
+
+          {/* End marker */}
+          <div
+            className="absolute top-0 bottom-0 w-1 bg-blue-500 cursor-ew-resize"
+            style={{ left: `${(endTime / duration) * 100}%` }}
+            onMouseDown={handleEndMarkerMouseDown}
+          >
+            <div className="absolute top-0 -ml-3 w-4 h-1 bg-blue-500" />
+            <div className="absolute bottom-0 -ml-3 w-4 h-1 bg-blue-500" />
+          </div>
+
+          {/* Time indicators */}
+          <div className="absolute -bottom-6 left-0 text-xs text-zinc-400">
+            {formatTime(startTime)}
+          </div>
+          <div className="absolute -bottom-6 right-0 text-xs text-zinc-400">
+            {formatTime(duration)}
+          </div>
         </div>
-    );
+
+        {/* Keyboard navigation instructions */}
+        <div className="mt-6 text-xs text-zinc-400">
+          <p>
+            Keyboard controls: ← → (frame by frame), Shift+← → (second by
+            second), Home/End, Space (play/pause)
+          </p>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="flex items-center space-x-4 mb-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={togglePlay}
+          className="text-white hover:bg-zinc-800"
+        >
+          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={jumpToStart}
+          className="text-white hover:bg-zinc-800"
+        >
+          <SkipBack size={20} />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={jumpToEnd}
+          className="text-white hover:bg-zinc-800"
+        >
+          <SkipForward size={20} />
+        </Button>
+
+        <div className="text-sm text-white">
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </div>
+
+        <div className="flex items-center ml-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMute}
+            className="text-white hover:bg-zinc-800"
+          >
+            {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+          </Button>
+
+          <div className="w-24">
+            <Slider
+              value={[isMuted ? 0 : volume]}
+              min={0}
+              max={1}
+              step={0.01}
+              onValueChange={handleVolumeChange}
+              className="[&>span:first-child]:h-1.5 [&>span:first-child]:bg-zinc-700"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Frame extraction controls */}
+      <div className="mb-4 p-4 bg-zinc-800 rounded-md">
+        <h3 className="text-white font-medium mb-2">Extract Multiple Frames</h3>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <label htmlFor="numFrames" className="text-white text-sm">
+              Number of frames:
+            </label>
+            <input
+              id="numFrames"
+              type="number"
+              min="1"
+              max="100"
+              value={numFramesToExtract}
+              onChange={(e) =>
+                setNumFramesToExtract(
+                  Math.max(
+                    1,
+                    Math.min(100, Number.parseInt(e.target.value) || 1),
+                  ),
+                )
+              }
+              className="w-16 px-2 py-1 bg-zinc-700 text-white rounded border border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <Button
+            onClick={handleExtractMultipleFrames}
+            disabled={isExtractingFrames || !onExtractMultipleFrames}
+            variant="outline"
+            className="flex items-center"
+          >
+            <Download size={16} className="mr-1" />
+            {isExtractingFrames
+              ? `Extracting (${extractionProgress}%)`
+              : 'Extract & Download'}
+          </Button>
+        </div>
+
+        {isExtractingFrames && (
+          <div className="mt-2 w-full bg-zinc-700 rounded-full h-2.5">
+            <div
+              className="bg-green-500 h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${extractionProgress}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Cut controls */}
+      <div className="flex items-center space-x-4">
+        <div className="text-white text-sm">
+          Selection:{' '}
+          <span className="font-medium">
+            {formatTime(startTime)} - {formatTime(endTime)}
+          </span>
+          <span className="text-zinc-400 ml-2">
+            ({formatTime(endTime - startTime)})
+          </span>
+        </div>
+
+        {canExtractFrame && (
+          <Button
+            onClick={handleExtractFrame}
+            disabled={!onFrameExtracted}
+            variant="outline"
+          >
+            Extract Frame
+          </Button>
+        )}
+
+        <div className="flex space-x-2 ml-auto">
+          <Button onClick={handleCutVideo} variant="outline">
+            Cut Video
+          </Button>
+          <Button
+            onClick={handleCutReversedVideo}
+            variant="outline"
+            className="flex items-center"
+          >
+            <RotateCcw size={16} className="mr-1" />
+            Cut Reversed
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 };

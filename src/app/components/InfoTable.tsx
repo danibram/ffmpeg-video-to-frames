@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { FlattenedObject } from '../utils/flattenObject';
 
 export const InfoTable: React.FC<{

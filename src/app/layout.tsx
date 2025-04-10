@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/react';
 import type { Metadata } from 'next';
+import type React from 'react';
 import { FFmpegProvider } from './contexts/FFmpegContext';
 import './globals.css';
 

@@ -1,67 +1,18 @@
 'use client';
 
-import { fetchFile } from '@ffmpeg/util';
 import JSZip from 'jszip';
-import { useRef, useState } from 'react';
-import { Button } from '../../components/ui/button';
+import { useRef } from 'react';
 import { useFFmpeg } from '../contexts/FFmpegContext';
-import { fileToBlobDownload } from '../utils/fileToBlobDownload';
-import { flattenObject } from '../utils/flattenObject';
-import { InfoTable } from './InfoTable';
+import { blobDownload, fileToBlobDownload } from '../utils/fileToBlobDownload';
 import { VideoEditor } from './VideoEditor';
 
-const InputVideoUrl = ({ loadVideo }: { loadVideo: (url: string) => void }) => {
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-
-  return (
-    <div className="flex flex-row items-center justify-center gap-4">
-      <input
-        type="text"
-        onChange={(e) => setVideoUrl(e.target.value)}
-        className="px-2 py-1 bg-zinc-700 text-white rounded border border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-      <Button
-        variant="outline"
-        onClick={() => {
-          if (videoUrl) {
-            loadVideo(videoUrl);
-          }
-        }}
-      >
-        Load from url
-      </Button>
-    </div>
-  );
-};
-
-const Video = () => {
-  const [file, setFile] = useState<File | null>(null);
-  const { loaded, isLoading } = useFFmpeg();
+const Video = ({
+  file,
+  videoDuration,
+}: { file: File; videoDuration: number }) => {
   const messageRef = useRef<HTMLParagraphElement | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [videoInfo, setVideoInfo] = useState<Record<string, unknown> | null>(
-    null,
-  );
-  const { writeFile, runFFprobe, deleteFile, ffmpeg } = useFFmpeg();
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setFile(file);
-
-      const { name } = file;
-      if (messageRef.current) messageRef.current.innerHTML = 'Reading file...';
-
-      await writeFile(name, file);
-      const probeResult = await runFFprobe(name);
-      setVideoInfo(probeResult);
-      await deleteFile(name);
-
-      if (messageRef.current) messageRef.current.innerHTML = 'Ready to go!';
-    }
-  };
+  const { writeFile, deleteFile, ffmpeg } = useFFmpeg();
 
   const handleFrameExtracted = async (timestamp: number) => {
     if (!file || !ffmpeg) return;
@@ -74,13 +25,6 @@ const Video = () => {
 
       // Write the file to FFmpeg's virtual filesystem
       await writeFile(name, file);
-
-      // Get video duration info
-      const videoDuration =
-        videoInfo?.format && typeof videoInfo.format === 'object' &&
-          'duration' in videoInfo.format
-          ? Number(videoInfo.format.duration)
-          : 0;
 
       // Check if this is the last frame of the video
       const isLastFrame =
@@ -124,8 +68,8 @@ const Video = () => {
       fileToBlobDownload(
         frameData,
         file.name,
-        'image/webp',
-        `frame_${timestamp.toFixed(2)}.webp`,
+        'image/png',
+        `frame_${timestamp.toFixed(2)}.png`,
       );
 
       // Clean up
@@ -264,13 +208,6 @@ const Video = () => {
       // Write the input file to FFmpeg's virtual filesystem
       await writeFile(name, file);
 
-      // Get video duration info
-      const videoDuration =
-        videoInfo?.format && typeof videoInfo.format === 'object' &&
-          'duration' in videoInfo.format
-          ? Number(videoInfo.format.duration)
-          : 0;
-
       // Calculate time step between frames
       const timeStep = (endTime - startTime) / (numFrames - 1);
 
@@ -343,14 +280,8 @@ const Video = () => {
 
       // Generate and download the zip file
       const content = await zip.generateAsync({ type: 'blob' });
-      const url = window.URL.createObjectURL(content);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${file.name.split('.')[0]}_frames.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const filename = `${file.name.split('.')[0]}_frames.zip`;
+      blobDownload(content, filename);
 
       // Clean up
       await deleteFile(name);
@@ -364,67 +295,8 @@ const Video = () => {
     }
   };
 
-  const handleLoadVideo = async (url: string) => {
-    const fileFetched = await fetchFile(url);
-    const fileName = url.split('/').pop() || 'video.mp4';
-    const file = new File([fileFetched], fileName, { type: 'video/mp4' });
-    setFile(file);
-
-    const { name } = file;
-    if (messageRef.current) messageRef.current.innerHTML = 'Reading file...';
-
-    await writeFile(name, file);
-    const probeResult = await runFFprobe(name);
-    setVideoInfo(probeResult);
-    await deleteFile(name);
-
-    if (messageRef.current) messageRef.current.innerHTML = 'Ready to go!';
-  };
-
-  return loaded ? (
-    <div className="bg-zync-900 text-white flex flex-col items-center justify-center gap-4">
-      <div className="flex flex-row items-center justify-center gap-4">
-        {!file && (
-          <div className="flex flex-col items-center justify-center gap-4">
-            <div className="flex flex-row items-center justify-center gap-4">
-              <label
-                htmlFor="uploader"
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full"
-              >
-                {file ? 'Change video' : 'Select a video'}
-              </label>
-              <input
-                ref={fileRef}
-                type="file"
-                id="uploader"
-                accept="video/*"
-                onChange={handleFileChange}
-              />
-            </div>
-            <p>or</p>
-            <div className="flex flex-row items-center justify-center gap-4">
-              <InputVideoUrl loadVideo={handleLoadVideo} />
-            </div>
-          </div>
-        )}
-        {file && (
-          <>
-            <p>{file.name}</p>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                setFile(null);
-                if (fileRef.current) {
-                  fileRef.current.value = '';
-                }
-                setVideoInfo(null);
-              }}
-            >
-              X
-            </Button>
-          </>
-        )}
-      </div>
+  return (
+    <>
       <p ref={messageRef} />
 
       {file && (
@@ -438,27 +310,7 @@ const Video = () => {
           />
         </>
       )}
-
-      {videoInfo && <InfoTable data={flattenObject(videoInfo)} />}
-    </div>
-  ) : isLoading ? (
-    <span className="animate-spin ml-3">
-      <svg
-        viewBox="0 0 1024 1024"
-        focusable="false"
-        data-icon="loading"
-        width="1em"
-        height="1em"
-        fill="currentColor"
-        aria-hidden="true"
-      >
-        <path d="M988 548c-19.9 0-36-16.1-36-36 0-59.4-11.6-117-34.6-171.3a440.45 440.45 0 00-94.3-139.9 437.71 437.71 0 00-139.9-94.3C629 83.6 571.4 72 512 72c-19.9 0-36-16.1-36-36s16.1-36 36-36c69.1 0 136.2 13.5 199.3 40.3C772.3 66 827 103 874 150c47 47 83.9 101.8 109.7 162.7 26.7 63.1 40.2 130.2 40.2 199.3.1 19.9-16 36-35.9 36z" />
-      </svg>
-    </span>
-  ) : (
-    <div className="flex flex-col items-center justify-center">
-      <p>No video selected</p>
-    </div>
+    </>
   );
 };
 

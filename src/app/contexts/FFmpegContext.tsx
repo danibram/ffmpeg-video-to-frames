@@ -5,6 +5,7 @@ import { fetchFile } from '@ffmpeg/util';
 import {
   type ReactNode,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -33,7 +34,7 @@ export const FFmpegProvider = ({ children }: { children: ReactNode }) => {
     ffmpegRef.current = new FFmpeg();
   }, []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!ffmpegRef.current) return;
 
     setIsLoading(true);
@@ -45,7 +46,7 @@ export const FFmpegProvider = ({ children }: { children: ReactNode }) => {
     await ffmpeg.load();
     setLoaded(true);
     setIsLoading(false);
-  };
+  }, []);
 
   const writeFile = async (name: string, file: File) => {
     if (!ffmpegRef.current) return;
@@ -87,7 +88,7 @@ export const FFmpegProvider = ({ children }: { children: ReactNode }) => {
     if (!loaded && ffmpegRef.current) {
       load();
     }
-  }, [loaded]);
+  }, [loaded, load]);
 
   return (
     <FFmpegContext.Provider

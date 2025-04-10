@@ -1,6 +1,8 @@
 'use client';
 import dynamic from 'next/dynamic';
-const Video = dynamic(() => import('./components/Video'), { ssr: false });
+const VideoLoader = dynamic(() => import('./components/VideoLoader'), {
+  ssr: false,
+});
 
 /**
  * Main page component for the Video Editor application
@@ -28,7 +30,7 @@ export default function Home() {
       </a>
       <main className="flex flex-col gap-[32px] row-start-2 items-center max-w-4xl">
         <h1 className="text-2xl">Video Editor</h1>
-        <Video />
+        <VideoLoader />
       </main>
       <footer className="flex flex-row gap-4 justify-between items-center mt-20">
         <a
