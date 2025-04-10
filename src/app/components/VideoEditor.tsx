@@ -1,16 +1,30 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Download, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
+import {
+    Download,
+    Pause,
+    Play,
+    RotateCcw,
+    SkipBack,
+    SkipForward,
+    Volume2,
+    VolumeX,
+} from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface VideoEditorProps {
     file: File;
     onFrameExtracted?: (timestamp: number) => void;
     onVideoCut?: (startTime: number, endTime: number) => void;
     onVideoCutReversed?: (startTime: number, endTime: number) => void;
-    onExtractMultipleFrames?: (startTime: number, endTime: number, numFrames: number) => void;
+    onExtractMultipleFrames?: (
+        startTime: number,
+        endTime: number,
+        numFrames: number,
+    ) => void;
 }
 
 export const VideoEditor: React.FC<VideoEditorProps> = ({
@@ -47,10 +61,10 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                 setEndTime(video.duration);
             };
 
-            video.addEventListener("loadedmetadata", handleLoadedMetadata);
+            video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
             return () => {
-                video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+                video.removeEventListener('loadedmetadata', handleLoadedMetadata);
                 URL.revokeObjectURL(video.src);
             };
         }
@@ -71,10 +85,10 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                 }
             };
 
-            video.addEventListener("timeupdate", handleTimeUpdate);
+            video.addEventListener('timeupdate', handleTimeUpdate);
 
             return () => {
-                video.removeEventListener("timeupdate", handleTimeUpdate);
+                video.removeEventListener('timeupdate', handleTimeUpdate);
             };
         }
     }, [endTime]);
@@ -84,60 +98,8 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
         setCanExtractFrame(selectedTime !== null);
     }, [selectedTime]);
 
-    // Keyboard navigation
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (!isFocused) return;
 
-            if (videoRef.current) {
-                const video = videoRef.current;
-                // Frame step (assuming 30fps) or second step when shift is pressed
-                const frameStep = 1 / 30; // One frame at 30fps
-                const secondStep = 1; // One second
-                const step = e.shiftKey ? secondStep : frameStep;
-
-                switch (e.key) {
-                    case "ArrowLeft":
-                        e.preventDefault();
-                        const newTimeLeft = Math.max(startTime, currentTime - step);
-                        video.currentTime = newTimeLeft;
-                        setCurrentTime(newTimeLeft);
-                        setSelectedTime(newTimeLeft);
-                        break;
-                    case "ArrowRight":
-                        e.preventDefault();
-                        const newTimeRight = Math.min(endTime, currentTime + step);
-                        video.currentTime = newTimeRight;
-                        setCurrentTime(newTimeRight);
-                        setSelectedTime(newTimeRight);
-                        break;
-                    case "Home":
-                        e.preventDefault();
-                        video.currentTime = startTime;
-                        setCurrentTime(startTime);
-                        setSelectedTime(startTime);
-                        break;
-                    case "End":
-                        e.preventDefault();
-                        video.currentTime = endTime;
-                        setCurrentTime(endTime);
-                        setSelectedTime(endTime);
-                        break;
-                    case " ":
-                        e.preventDefault();
-                        togglePlay();
-                        break;
-                }
-            }
-        };
-
-        document.addEventListener("keydown", handleKeyDown);
-        return () => {
-            document.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [currentTime, startTime, endTime, isPlaying, isFocused]);
-
-    const togglePlay = () => {
+    const togglePlay = useCallback(() => {
         if (videoRef.current) {
             if (isPlaying) {
                 videoRef.current.pause();
@@ -156,7 +118,66 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
             }
             setIsPlaying(!isPlaying);
         }
-    };
+    }, [isPlaying, currentTime, endTime, startTime]);
+
+    // Keyboard navigation
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isFocused) return;
+
+            if (videoRef.current) {
+                const video = videoRef.current;
+                // Frame step (assuming 30fps) or second step when shift is pressed
+                const frameStep = 1 / 30; // One frame at 30fps
+                const secondStep = 1; // One second
+                const step = e.shiftKey ? secondStep : frameStep;
+
+                switch (e.key) {
+                    case 'ArrowLeft': {
+                        e.preventDefault();
+                        const newTimeLeft = Math.max(startTime, currentTime - step);
+                        video.currentTime = newTimeLeft;
+                        setCurrentTime(newTimeLeft);
+                        setSelectedTime(newTimeLeft);
+                        break;
+                    }
+                    case 'ArrowRight': {
+                        e.preventDefault();
+                        const newTimeRight = Math.min(endTime, currentTime + step);
+                        video.currentTime = newTimeRight;
+                        setCurrentTime(newTimeRight);
+                        setSelectedTime(newTimeRight);
+                        break;
+                    }
+                    case 'Home': {
+                        e.preventDefault();
+                        video.currentTime = startTime;
+                        setCurrentTime(startTime);
+                        setSelectedTime(startTime);
+                        break;
+                    }
+                    case 'End': {
+                        e.preventDefault();
+                        video.currentTime = endTime;
+                        setCurrentTime(endTime);
+                        setSelectedTime(endTime);
+                        break;
+                    }
+                    case ' ': {
+                        e.preventDefault();
+                        togglePlay();
+                        break;
+                    }
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [currentTime, startTime, endTime, togglePlay, isFocused]);
+
 
     const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (videoRef.current) {
@@ -185,7 +206,10 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
             if ((isDraggingStart || isDraggingEnd) && videoRef.current) {
                 const rect = videoRef.current.getBoundingClientRect();
                 const offsetX = e.clientX - rect.left;
-                const newPosition = Math.max(0, Math.min((offsetX / rect.width) * duration, duration));
+                const newPosition = Math.max(
+                    0,
+                    Math.min((offsetX / rect.width) * duration, duration),
+                );
 
                 if (isDraggingStart) {
                     const newStartTime = Math.min(newPosition, endTime - 0.5);
@@ -212,14 +236,21 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
             setIsDraggingEnd(false);
         };
 
-        document.addEventListener("mousemove", handleMouseMove);
-        document.addEventListener("mouseup", handleMouseUp);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
 
         return () => {
-            document.removeEventListener("mousemove", handleMouseMove);
-            document.removeEventListener("mouseup", handleMouseUp);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDraggingStart, isDraggingEnd, duration, startTime, endTime, currentTime]);
+    }, [
+        isDraggingStart,
+        isDraggingEnd,
+        duration,
+        startTime,
+        endTime,
+        currentTime,
+    ]);
 
     const handleVolumeChange = (value: number[]) => {
         const newVolume = value[0];
@@ -250,7 +281,7 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
     const formatTime = (time: number) => {
         const minutes = Math.floor(time / 60);
         const seconds = Math.floor(time % 60);
-        return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
     const handleExtractFrame = async () => {
@@ -297,7 +328,7 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
 
         // Simulate progress updates (since we don't have direct access to the actual progress)
         const progressInterval = setInterval(() => {
-            setExtractionProgress(prev => {
+            setExtractionProgress((prev) => {
                 if (prev >= 100) {
                     clearInterval(progressInterval);
                     setIsExtractingFrames(false);
@@ -316,30 +347,34 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
 
     return (
         <div className="flex flex-col w-full rounded-lg shadow-xl">
-
             {/* Video Player */}
             <div className="relative aspect-video bg-black rounded-md overflow-hidden mb-4">
-                <video
-                    ref={videoRef}
-                    className="w-full h-full"
-                />
+                <video ref={videoRef} className="w-full h-full">
+                    <track kind="captions" />
+                </video>
             </div>
 
             {/* Timeline */}
             <div className="mb-4">
+                {/* biome-ignore lint/a11y/useKeyWithClickEvents: keyboard can be used to navigate */}
                 <div
                     className="relative h-16 bg-zinc-800 rounded-md cursor-pointer"
                     onClick={handleTimelineClick}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    tabIndex={0}
+                    role="slider"
                     aria-label="Timeline"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round((currentTime / duration) * 100)}
+                    tabIndex={0}
                 >
                     {/* Timeline background */}
                     <div className="absolute inset-0 flex items-center px-2">
                         {/* Generate frame markers */}
-                        {Array.from({ length: 10 }).map((_, i) => (
-                            <div key={i} className="h-8 border-l border-zinc-600 flex-grow" />
+                        {Array.from({ length: 10 }).map((_, index) => (
+                            // biome-ignore lint/suspicious/noArrayIndexKey: no other option
+                            <div key={`frame-marker-${index}`} className="h-8 border-l border-zinc-600 flex-grow" />
                         ))}
                     </div>
 
@@ -356,8 +391,7 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                     <div
                         className="absolute top-0 bottom-0 w-0.5 bg-white"
                         style={{ left: `${(currentTime / duration) * 100}%` }}
-                    >
-                    </div>
+                    />
 
                     {/* Start marker */}
                     <div
@@ -380,27 +414,49 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                     </div>
 
                     {/* Time indicators */}
-                    <div className="absolute -bottom-6 left-0 text-xs text-zinc-400">{formatTime(startTime)}</div>
-                    <div className="absolute -bottom-6 right-0 text-xs text-zinc-400">{formatTime(duration)}</div>
+                    <div className="absolute -bottom-6 left-0 text-xs text-zinc-400">
+                        {formatTime(startTime)}
+                    </div>
+                    <div className="absolute -bottom-6 right-0 text-xs text-zinc-400">
+                        {formatTime(duration)}
+                    </div>
                 </div>
 
                 {/* Keyboard navigation instructions */}
                 <div className="mt-6 text-xs text-zinc-400">
-                    <p>Keyboard controls: ← → (frame by frame), Shift+← → (second by second), Home/End, Space (play/pause)</p>
+                    <p>
+                        Keyboard controls: ← → (frame by frame), Shift+← → (second by
+                        second), Home/End, Space (play/pause)
+                    </p>
                 </div>
             </div>
 
             {/* Controls */}
             <div className="flex items-center space-x-4 mb-4">
-                <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-zinc-800">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={togglePlay}
+                    className="text-white hover:bg-zinc-800"
+                >
                     {isPlaying ? <Pause size={20} /> : <Play size={20} />}
                 </Button>
 
-                <Button variant="ghost" size="icon" onClick={jumpToStart} className="text-white hover:bg-zinc-800">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={jumpToStart}
+                    className="text-white hover:bg-zinc-800"
+                >
                     <SkipBack size={20} />
                 </Button>
 
-                <Button variant="ghost" size="icon" onClick={jumpToEnd} className="text-white hover:bg-zinc-800">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={jumpToEnd}
+                    className="text-white hover:bg-zinc-800"
+                >
                     <SkipForward size={20} />
                 </Button>
 
@@ -409,7 +465,12 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                 </div>
 
                 <div className="flex items-center ml-auto">
-                    <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white hover:bg-zinc-800">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggleMute}
+                        className="text-white hover:bg-zinc-800"
+                    >
                         {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
                     </Button>
 
@@ -431,14 +492,23 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                 <h3 className="text-white font-medium mb-2">Extract Multiple Frames</h3>
                 <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
-                        <label htmlFor="numFrames" className="text-white text-sm">Number of frames:</label>
+                        <label htmlFor="numFrames" className="text-white text-sm">
+                            Number of frames:
+                        </label>
                         <input
                             id="numFrames"
                             type="number"
                             min="1"
                             max="100"
                             value={numFramesToExtract}
-                            onChange={(e) => setNumFramesToExtract(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                            onChange={(e) =>
+                                setNumFramesToExtract(
+                                    Math.max(
+                                        1,
+                                        Math.min(100, Number.parseInt(e.target.value) || 1),
+                                    ),
+                                )
+                            }
                             className="w-16 px-2 py-1 bg-zinc-700 text-white rounded border border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
@@ -450,7 +520,9 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                         className="flex items-center"
                     >
                         <Download size={16} className="mr-1" />
-                        {isExtractingFrames ? `Extracting (${extractionProgress}%)` : 'Extract & Download'}
+                        {isExtractingFrames
+                            ? `Extracting (${extractionProgress}%)`
+                            : 'Extract & Download'}
                     </Button>
                 </div>
 
@@ -459,7 +531,7 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
                         <div
                             className="bg-green-500 h-2.5 rounded-full transition-all duration-300"
                             style={{ width: `${extractionProgress}%` }}
-                        ></div>
+                        />
                     </div>
                 )}
             </div>
@@ -467,11 +539,13 @@ export const VideoEditor: React.FC<VideoEditorProps> = ({
             {/* Cut controls */}
             <div className="flex items-center space-x-4">
                 <div className="text-white text-sm">
-                    Selection:{" "}
+                    Selection:{' '}
                     <span className="font-medium">
                         {formatTime(startTime)} - {formatTime(endTime)}
                     </span>
-                    <span className="text-zinc-400 ml-2">({formatTime(endTime - startTime)})</span>
+                    <span className="text-zinc-400 ml-2">
+                        ({formatTime(endTime - startTime)})
+                    </span>
                 </div>
 
                 {canExtractFrame && (
