@@ -10,6 +10,29 @@ import { flattenObject } from '../utils/flattenObject';
 import { InfoTable } from './InfoTable';
 import { VideoEditor } from './VideoEditor';
 
+const InputVideoUrl = ({ loadVideo }: { loadVideo: (url: string) => void }) => {
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-row items-center justify-center gap-4">
+      <input
+        type="text"
+        onChange={(e) => setVideoUrl(e.target.value)}
+        className="px-2 py-1 bg-zinc-700 text-white rounded border border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <Button
+        variant="outline"
+        onClick={() => {
+          if (videoUrl) {
+            loadVideo(videoUrl);
+          }
+        }}
+      >
+        Load from url
+      </Button>
+    </div>
+  );
+};
 
 const Video = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -340,15 +363,50 @@ const Video = () => {
         messageRef.current.innerHTML = `Error extracting frames: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   };
+
+  const handleLoadVideo = async (url: string) => {
+    const fileFetched = await fetchFile(url);
+    const fileName = url.split('/').pop() || 'video.mp4';
+    const file = new File([fileFetched], fileName, { type: 'video/mp4' });
+    setFile(file);
+
+    const { name } = file;
+    if (messageRef.current) messageRef.current.innerHTML = 'Reading file...';
+
+    await writeFile(name, file);
+    const probeResult = await runFFprobe(name);
+    setVideoInfo(probeResult);
+    await deleteFile(name);
+
+    if (messageRef.current) messageRef.current.innerHTML = 'Ready to go!';
   };
 
   return loaded ? (
     <div className="bg-zync-900 text-white flex flex-col items-center justify-center gap-4">
       <div className="flex flex-row items-center justify-center gap-4">
-        <label htmlFor="uploader" className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-          {file ? "Change video" : "Select a video"}
-        </label>
-        <input ref={fileRef} type="file" id="uploader" accept="video/*" onChange={handleFileChange} />
+        {!file && (
+          <div className="flex flex-col items-center justify-center gap-4">
+            <div className="flex flex-row items-center justify-center gap-4">
+              <label
+                htmlFor="uploader"
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full"
+              >
+                {file ? 'Change video' : 'Select a video'}
+              </label>
+              <input
+                ref={fileRef}
+                type="file"
+                id="uploader"
+                accept="video/*"
+                onChange={handleFileChange}
+              />
+            </div>
+            <p>or</p>
+            <div className="flex flex-row items-center justify-center gap-4">
+              <InputVideoUrl loadVideo={handleLoadVideo} />
+            </div>
+          </div>
+        )}
         {file && (
           <>
             <p>{file.name}</p>
